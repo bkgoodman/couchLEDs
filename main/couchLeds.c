@@ -79,11 +79,15 @@ void app_main(void)
 {
 
 		ESP_LOGI(TAG,"On the Air.");
-    init_leds();
+    //init_leds();
     rmt_init();
      while (1) {
         ESP_LOGI(TAG,"%d %d %d",ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2]);
+        /*
         set_pixels(ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2],255);
+        vTaskDelay(250 / portTICK_PERIOD_MS);
+        set_pixels(16,0,0,255);
+        */
         vTaskDelay(250 / portTICK_PERIOD_MS);
      }
 }

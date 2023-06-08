@@ -80,12 +80,12 @@ void rmt_init(void) {
         rmt_channels[i].rx_config.filter_ticks_thresh = 100;
         rmt_channels[i].rx_config.idle_threshold = RMT_RX_MAX_US * RMT_TICK_PER_US;
 
-        //rmt_config(&rmt_channels[i]);
+        rmt_config(&rmt_channels[i]);
     ESP_LOGI(TAG, "Allocated TX RMT channel %d",rmt_channels[i].channel);
-        //rmt_set_rx_intr_en(rmt_channels[i].channel, true);
-        //rmt_rx_start(rmt_channels[i].channel, 1);
+        rmt_set_rx_intr_en(rmt_channels[i].channel, true);
+        rmt_rx_start(rmt_channels[i].channel, 1);
     }
 
-    //rmt_isr_register(rmt_isr_handler, NULL, 0, NULL);
+    rmt_isr_register(rmt_isr_handler, NULL, 0, NULL);
     ESP_LOGI(TAG, "Init ISR on %d", xPortGetCoreID());
 }
