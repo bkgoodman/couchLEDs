@@ -37,9 +37,17 @@
 #include <esp_log.h>
 
 
+#define RMT_TICK_PER_US 8
+// determines how many clock cycles one "tick" is
+// [1..255], source is generally 80MHz APB clk
+#define RMT_RX_CLK_DIV (80000000/RMT_TICK_PER_US/1000000)
+// time before receiver goes idle
+#define RMT_RX_MAX_US 3500
+
 static SemaphoreHandle_t neopixel_sem = NULL;
 static intr_handle_t rmt_intr_handle = NULL;
 static rmt_channel_t RMTchannel = RMT_CHANNEL_0;
+static rmt_channel_t RCchannel = RMT_CHANNEL_2;
 static uint16_t neopixel_pos, neopixel_half, neopixel_bufIsDirty, neopixel_termsent;
 static uint16_t neopixel_buf_len = 0;
 static pixel_settings_t *neopixel_px;
@@ -47,6 +55,7 @@ static uint8_t *neopixel_buffer = NULL;
 static uint8_t neopixel_brightness = 255;
 
 static uint8_t used_channels[RMT_CHANNEL_MAX] = {0};
+volatile uint16_t rc_val=0;
 
 // Get color value of RGB component
 //---------------------------------------------------
@@ -273,6 +282,11 @@ static void neopixel_handleInterrupt(void *arg)
   uint32_t tx_end_event_mask = 1 << (RMTchannel*3);
   uint32_t intr_st = RMT.int_st.val;
 
+  rc_val++;
+  if (intr_st & 4) {
+    RMT.int_clr.val = 4;
+    rc_val++;
+  }
   if (intr_st & tx_thr_event_mask) {
     copyToRmtBlock_half();
     RMT.int_clr.val = tx_thr_event_mask;
@@ -321,6 +335,12 @@ int neopixel_init(int gpioNum, rmt_channel_t channel)
 
 	RMT.apb_conf.fifo_mask = 1;						//enable memory access, instead of FIFO mode.
 	RMT.apb_conf.mem_tx_wrap_en = 1;				//wrap around when hitting end of buffer
+                                        
+  //RMT.apb_conf.rx_non_empty_thr = 1;
+  //RMT.apb_conf.mem_rx_wrap_en = 0;
+  //RMT.apb_conf.rx_conti_mode = 0;
+
+                                          
 	RMT.conf_ch[channel].conf0.div_cnt = DIVIDER;
 	RMT.conf_ch[channel].conf0.mem_size = 1;
 	RMT.conf_ch[channel].conf0.carrier_en = 0;
@@ -336,6 +356,24 @@ int neopixel_init(int gpioNum, rmt_channel_t channel)
 
 	RMT.tx_lim_ch[channel].limit = MAX_PULSES;
 	RMT.int_ena.val = tx_thr_event_mask | tx_end_event_mask;
+
+  /* INIT RC */
+  gpio_set_direction(GPIO_NUM_18, GPIO_MODE_INPUT);
+	res = rmt_set_pin(RCchannel, RMT_MODE_RX, (gpio_num_t)18);
+	RMT.conf_ch[RCchannel].conf0.div_cnt = DIVIDER;
+	RMT.conf_ch[RCchannel].conf0.mem_size = 1;
+	RMT.conf_ch[RCchannel].conf0.carrier_en = 0;
+	RMT.conf_ch[RCchannel].conf0.carrier_out_lv = 1;
+	RMT.conf_ch[RCchannel].conf0.mem_pd = 0;
+	RMT.conf_ch[RCchannel].conf0.idle_thres =  RMT_RX_MAX_US * RMT_TICK_PER_US;
+
+	RMT.conf_ch[RCchannel].conf1.rx_en = 1;
+	RMT.conf_ch[RCchannel].conf1.rx_filter_en = 1;
+	RMT.conf_ch[RCchannel].conf1.rx_filter_thres = 100;
+	uint32_t rx_event_mask = 0x444;
+
+  /* END RC INIT */
+	RMT.int_ena.val = tx_thr_event_mask | tx_end_event_mask | rx_event_mask;
 
 	used_channels[channel] = 1;
 	xSemaphoreGive(neopixel_sem);
