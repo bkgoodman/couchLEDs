@@ -272,6 +272,7 @@ static void copyToRmtBlock_half()
 	return;
 }
 
+extern volatile uint32_t rc_test_val;
 // RMT interrupt handler
 //---------------------------------------------
 static void neopixel_handleInterrupt(void *arg)
@@ -282,11 +283,12 @@ static void neopixel_handleInterrupt(void *arg)
   uint32_t tx_end_event_mask = 1 << (RMTchannel*3);
   uint32_t intr_st = RMT.int_st.val;
 
-  rc_val++;
-  if (intr_st & 4) {
-    RMT.int_clr.val = 4;
-    rc_val++;
-  }
+
+  //if (intr_st & ((RMT_CHANNEL_2*3)+1)) {
+  // / rc_test_val++;
+  //  RMT.int_clr.val = ((RMT_CHANNEL_2*3)+1);
+  //}
+
   if (intr_st & tx_thr_event_mask) {
     copyToRmtBlock_half();
     RMT.int_clr.val = tx_thr_event_mask;
@@ -358,6 +360,19 @@ int neopixel_init(int gpioNum, rmt_channel_t channel)
 	RMT.int_ena.val = tx_thr_event_mask | tx_end_event_mask;
 
   /* INIT RC */
+    rmt_config_t config;
+    config.rmt_mode = RMT_MODE_RX;
+    config.channel = (rmt_channel_t) RMT_CHANNEL_2;
+    config.gpio_num = (gpio_num_t)18;
+    config.mem_block_num = 1;                 //how many memory blocks 64 x N (0-7)
+    config.rx_config.filter_en = true;
+    config.rx_config.filter_ticks_thresh = 100;
+    config.rx_config.idle_threshold = 9500;
+    config.clk_div = 80; //1MHz
+    //ESP_ERROR_CHECK(rmt_config(&config));
+    //ESP_ERROR_CHECK(rmt_set_rx_intr_en(RMT_CHANNEL_2, true));
+    //ESP_ERROR_CHECK(rmt_rx_start(RMT_CHANNEL_2, 1));
+#if 0
   gpio_set_direction(GPIO_NUM_18, GPIO_MODE_INPUT);
 	res = rmt_set_pin(RCchannel, RMT_MODE_RX, (gpio_num_t)18);
 	RMT.conf_ch[RCchannel].conf0.div_cnt = DIVIDER;
@@ -371,9 +386,10 @@ int neopixel_init(int gpioNum, rmt_channel_t channel)
 	RMT.conf_ch[RCchannel].conf1.rx_filter_en = 1;
 	RMT.conf_ch[RCchannel].conf1.rx_filter_thres = 100;
 	uint32_t rx_event_mask = 0x444;
+	RMT.int_ena.val |= tx_thr_event_mask | tx_end_event_mask | rx_event_mask;
+#endif
 
   /* END RC INIT */
-	RMT.int_ena.val = tx_thr_event_mask | tx_end_event_mask | rx_event_mask;
 
 	used_channels[channel] = 1;
 	xSemaphoreGive(neopixel_sem);

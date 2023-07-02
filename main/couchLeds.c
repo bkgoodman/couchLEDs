@@ -5,12 +5,15 @@
 #include <esp_system.h>
 #include "freertos/task.h"
 
-#include "config_rmt.h"
+//#include "config_rmt.h"
 #include "neopixel.h"
 #define NEOPIXEL_RMT_CHANNEL 0
 #define GPIO_OUTPUT_NEOPIXEL 23
-#define NR_LED (1)
+#define NR_LED (10)
 #define	NEOPIXEL_WS2812 1
+#include "soc/rtc_wdt.h"
+volatile uint32_t rc_test_val=0;
+volatile unsigned long recv=0;
 uint32_t		pixels[NR_LED];
 pixel_settings_t px;
 static const char *TAG = "CouchLED";
@@ -23,7 +26,48 @@ void set_pixels(uint16_t r, uint16_t g, uint16_t b, uint16_t l) {
 	np_show(&px, NEOPIXEL_RMT_CHANNEL);
 }
 
-extern volatile uint16_t rc_val;
+#define RC_CHANNELS 6
+unsigned short rc_gpio[RC_CHANNELS]={4,18,19,34,35,36};
+unsigned short rc_gpio_binary_out[RC_CHANNELS]={33,32,27,26,25,23};
+unsigned long rc_val[RC_CHANNELS];
+// Measure RC data
+#define OLD_MIN 430
+#define OLD_MAX 730
+#define RC_MEDIAN (((OLD_MAX-OLD_MIN)/2)+OLD_MIN)
+void rc_recv(void *arg) {
+  unsigned long tm[RC_CHANNELS];
+  short i;
+  unsigned short state[RC_CHANNELS];
+
+  for (i=0;i<RC_CHANNELS;i++) {
+    gpio_set_direction(rc_gpio[i],GPIO_MODE_INPUT);
+    gpio_set_direction(rc_gpio_binary_out[i],GPIO_MODE_OUTPUT);
+    state[i]=0;
+    tm[i]=0;
+  }
+  while(1) {
+    for (i=0;i<RC_CHANNELS;i++){
+      unsigned short level = gpio_get_level(rc_gpio[i]);
+      switch (state[i]) {
+        case 0: // Await High
+                if (level==1) {
+                  state[i]=1;
+                  tm[i]=0;
+                }
+          break;
+        case 1: // Await Low
+                tm[i]++;
+                if (level==0) {
+                  state[i]=0;
+                  rc_val[i]=tm[i];
+                  gpio_set_level(rc_gpio_binary_out[i],(rc_val[i]>= RC_MEDIAN)? 1: 0);
+                }
+          break;
+      }
+    }
+  }
+}
+
 void init_leds() {
 	int rc;
 	rc = neopixel_init(GPIO_OUTPUT_NEOPIXEL, NEOPIXEL_RMT_CHANNEL);
@@ -77,24 +121,49 @@ void init_leds() {
 	np_show(&px, NEOPIXEL_RMT_CHANNEL);
 }
 
-#if 0
+int map_range(int value) {
+    // Calculate the old range and the new range
+    int old_range = OLD_MAX - OLD_MIN;
+    int new_range = 255 - 0;
+    
+    // Map the value from the old range to the new range
+    int mapped_value = (((value - OLD_MIN) * new_range) / old_range) + 0;
+    
+    if (mapped_value<0)  return 0;
+    if (mapped_value>255)  return 255;
+    return mapped_value;
+}
+#if 1
 void app_main(void)
 {
 
+    char *disp;
 		ESP_LOGI(TAG,"On the Air.");
-    //init_leds();
-    rmt_init();
+    init_leds();
+    xTaskCreatePinnedToCore(&rc_recv, "RCrcv", 8192, NULL, 55, NULL,1);
+    //rmt_init();
      while (1) {
-        ESP_LOGI(TAG,"%u %d %d %d",rc_val,ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2]);
+        rtc_wdt_feed();
+        //ESP_LOGI(TAG,"%u %d %d %d",recv,ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2]);
+        //ESP_LOGI(TAG,"%u %u",recv,rc_test_val);
+        unsigned int v1 = map_range(rc_val[0]);
+        unsigned int v2 = map_range(rc_val[1]);
+        unsigned int v3 = map_range(rc_val[2]);
+        if (v1<118) disp="LEFT";
+        else if (v1>138) disp="RIGHT";
+        else if (v2>138) disp="FWD";
+        else if (v2<118) disp="REV";
+        else  disp="STOP";
+        ESP_LOGI(TAG,"RC Value= %lu %lu %lu = %u %u %u = %s",rc_val[0],rc_val[1],rc_val[2],v1,v2,v3,disp);
         //set_pixels(ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2],255);
-        vTaskDelay(250 / portTICK_PERIOD_MS);
-        //set_pixels(16,0,0,255);
-        vTaskDelay(250 / portTICK_PERIOD_MS);
+        //set_pixels(0,0,0,255);
+        //vTaskDelay(250 / portTICK_PERIOD_MS);
+        set_pixels(v1,v2,v3,255);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
      }
 }
-#endif
+#else
 
-#if 1
 #include "driver/rmt.h"
 #include "soc/rmt_reg.h"
 #include "soc/rmt_struct.h"
@@ -106,7 +175,6 @@ void app_main(void)
 #define RMT_CLK_DIV     80
 #define RMT_RX_FILTER_THRES    100
 
-volatile uint32_t test=0;
 void IRAM_ATTR rmt_isr(void* arg) {
   uint32_t intr_st = RMT.int_st.val;
         uint32_t channel_mask = BIT(RMT_CHANNEL_2*3+1);
