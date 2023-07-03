@@ -9,7 +9,7 @@
 #include "neopixel.h"
 #define NEOPIXEL_RMT_CHANNEL 0
 #define GPIO_OUTPUT_NEOPIXEL 23
-#define NR_LED (4)
+#define NR_LED (12)
 #define	NEOPIXEL_WS2812 1
 #include "soc/rtc_wdt.h"
 volatile uint32_t rc_test_val=0;
@@ -197,6 +197,8 @@ int abs(int a) {
 void app_main(void)
 {
 
+    unsigned short mode = 0;
+
 		ESP_LOGI(TAG,"On the Air.");
     init_leds();
     vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -239,10 +241,37 @@ void app_main(void)
           l=16-l;
         }
         l = (l*16)+8;
-        ESP_LOGI(TAG,"RC Value= %lu %lu %lu = %u %u %u = level = %d : %s -> %s",rc_val[0],rc_val[1],rc_val[2],v1,v2,v3,l,statestr[nextstate],statestr[state]);
+        if (mode == 0) ESP_LOGI(TAG,"RC Value= %lu %lu %lu = %u %u %u = level = %d : %s -> %s",rc_val[0],rc_val[1],rc_val[2],v1,v2,v3,l,statestr[nextstate],statestr[state]);
         //set_all_pixels(ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2],255);
         //set_all_pixels(0,0,0);
         //vTaskDelay(250 / portTICK_PERIOD_MS);
+        //
+        if (mode == 1) {
+                switch (state_time % 20) {
+                  case 0:
+                    set_leftright_pixels(255,255,255,   0,0,0); 
+                    break;
+                  case 2:
+                  case 4:
+                  case 6:
+                  case 8:
+                    set_leftright_pixels(0,255,0,   0,0,0); 
+                    break;
+                  case 10:
+                    set_leftright_pixels(0,0,0,   255,255,255); 
+                    break;
+                  case 12:
+                  case 14:
+                  case 16:
+                  case 18:
+                    set_leftright_pixels(0,0,0,   0,0,255); 
+                    break;
+                  default:
+                    set_leftright_pixels(0,0,0,   0,0,0); 
+                    break;
+              }
+        } else 
+          // Normal mode
         switch (state) {
           case STATE_INIT:
             set_all_pixels(state_time <2 ? 255:0,state_time >=4 ? 255:0,state_time % 2 ? 0 : 255);
@@ -284,7 +313,7 @@ void app_main(void)
             break;
         }
         state_time++;
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        vTaskDelay(((mode == 1)? 50: 100) / portTICK_PERIOD_MS);
      }
 }
 
