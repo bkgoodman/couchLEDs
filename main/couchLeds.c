@@ -9,7 +9,7 @@
 #include "neopixel.h"
 #define NEOPIXEL_RMT_CHANNEL 0
 #define GPIO_OUTPUT_NEOPIXEL 23
-#define NR_LED (10)
+#define NR_LED (4)
 #define	NEOPIXEL_WS2812 1
 #include "soc/rtc_wdt.h"
 volatile uint32_t rc_test_val=0;
@@ -18,14 +18,25 @@ uint32_t		pixels[NR_LED];
 pixel_settings_t px;
 static const char *TAG = "CouchLED";
 
-void set_pixels(uint16_t r, uint16_t g, uint16_t b, uint16_t l) {
+void set_all_pixels(uint16_t r, uint16_t g, uint16_t b) {
 	int i;
 	for (i=0;i<NR_LED;i++) {
-		np_set_pixel_rgbw_level(&px, i , r,g,b,0,l);
+		np_set_pixel_rgbw_level(&px, i , r,g,b,0,255);
 	}
 	np_show(&px, NEOPIXEL_RMT_CHANNEL);
 }
 
+void set_leftright_pixels(uint16_t rl, uint16_t gl, uint16_t bl,
+      uint16_t rr, uint16_t gr, uint16_t br) {
+	int i;
+	for (i=0;i<NR_LED;i++) {
+    if (i < NR_LED/2)
+		np_set_pixel_rgbw_level(&px, i , rl,gl,bl,0,255);
+    else
+		np_set_pixel_rgbw_level(&px, i , rr,gr,br,0,255);
+	}
+	np_show(&px, NEOPIXEL_RMT_CHANNEL);
+}
 #define RC_CHANNELS 6
 unsigned short rc_gpio[RC_CHANNELS]={4,18,19,34,35,36};
 unsigned short rc_gpio_binary_out[RC_CHANNELS]={33,32,27,26,25,22};
@@ -133,100 +144,124 @@ int map_range(int value) {
     if (mapped_value>255)  return 255;
     return mapped_value;
 }
-#if 1
+
+typedef enum state {
+  STATE_INIT=0,
+  STATE_IDLE,
+  STATE_FWD,
+  STATE_REV,
+  STATE_LEFT,
+  STATE_RIGHT,
+  STATE_STOP
+} state_e;
+
+state_e state=STATE_INIT;
+state_e nextstate=STATE_INIT;
+
+const char *statestr[] = {
+  "Init",
+  "Idle",
+  "Fwd",
+  "Rev",
+  "Left",
+  "Right",
+  "Stop"
+};
+unsigned long state_time=0;
+
+int abs(int a) {
+  if (a>0) return a;
+  return (-a);
+}
+
 void app_main(void)
 {
 
-    char *disp;
 		ESP_LOGI(TAG,"On the Air.");
     init_leds();
-    vTaskDelay(1500 / portTICK_PERIOD_MS);
-    set_pixels(16,0,0,255);
-    vTaskDelay(1500 / portTICK_PERIOD_MS);
-    set_pixels(0,16,0,255);
-    vTaskDelay(1500 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    set_all_pixels(16,0,0);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    set_all_pixels(0,16,0);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
     xTaskCreatePinnedToCore(&rc_recv, "RCrcv", 8192, NULL, 55, NULL,1);
-    set_pixels(0,0,16,255);
-    vTaskDelay(1500 / portTICK_PERIOD_MS);
-    set_pixels(8,8,8,255);
-    vTaskDelay(1500 / portTICK_PERIOD_MS);
+    set_all_pixels(0,0,16);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    set_all_pixels(8,8,8);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
     //rmt_init();
      while (1) {
+       uint16_t l;
         rtc_wdt_feed();
         //ESP_LOGI(TAG,"%u %d %d %d",recv,ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2]);
         //ESP_LOGI(TAG,"%u %u",recv,rc_test_val);
         unsigned int v1 = map_range(rc_val[0]);
         unsigned int v2 = map_range(rc_val[1]);
         unsigned int v3 = map_range(rc_val[2]);
-        if (v1<118) disp="LEFT";
-        else if (v1>138) disp="RIGHT";
-        else if (v2>138) disp="FWD";
-        else if (v2<118) disp="REV";
-        else  disp="STOP";
-        ESP_LOGI(TAG,"RC Value= %lu %lu %lu = %u %u %u = %s",rc_val[0],rc_val[1],rc_val[2],v1,v2,v3,disp);
-        //set_pixels(ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2],255);
-        //set_pixels(0,0,0,255);
+        if (state != STATE_INIT) {
+          if (v1<118) nextstate=STATE_LEFT;
+          else if (v1>138) nextstate=STATE_RIGHT;
+          else if (v2>138) nextstate=STATE_FWD;
+          else if (v2<118) nextstate=STATE_REV;
+          else if (state != STATE_IDLE) nextstate=STATE_STOP;
+        }
+
+        if ((state == STATE_STOP) && (state_time >= 16)) {
+          nextstate = STATE_IDLE;
+        }
+        if ((state != nextstate) && (state_time > 5)) {
+          state = nextstate;
+          state_time = 0;
+        }
+
+        l = state_time % 16;
+        if (l >= 8) {
+          l=16-l;
+        }
+        l = (l*16)+8;
+        ESP_LOGI(TAG,"RC Value= %lu %lu %lu = %u %u %u = level = %d : %s -> %s",rc_val[0],rc_val[1],rc_val[2],v1,v2,v3,l,statestr[nextstate],statestr[state]);
+        //set_all_pixels(ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2],255);
+        //set_all_pixels(0,0,0);
         //vTaskDelay(250 / portTICK_PERIOD_MS);
-        set_pixels(v1,v2,v3,255);
+        switch (state) {
+          case STATE_INIT:
+            set_all_pixels(state_time <2 ? 255:0,state_time >=4 ? 255:0,state_time % 2 ? 0 : 255);
+            if (state_time >= 10) {
+              state = STATE_IDLE;
+              nextstate = STATE_IDLE;
+              state_time =0;
+            }
+            break;
+          case STATE_LEFT:
+            if (state_time % 2)
+              set_leftright_pixels(32,32,0,0,(v2>138) ? l:0,0);
+            else
+              set_leftright_pixels(0,0,0,0,(v2>138) ? l:0,0);
+            break;
+          case STATE_RIGHT:
+            if (state_time % 2)
+              set_leftright_pixels(0,(v2>138) ? l:0,0,32,32,0);
+            else
+              set_leftright_pixels(0,(v2>138) ? l:0,0,0,0,0);
+            break;
+          case STATE_STOP:
+            set_all_pixels(64-(state_time*4),0,0);
+            break;
+          case STATE_REV:
+            set_all_pixels(32,32,32);
+            break;
+          case STATE_FWD:
+            set_all_pixels(0,l,0);
+            break;
+          case STATE_IDLE:
+            set_all_pixels(0,0,0);
+            break;
+          default:
+            set_all_pixels(v1,v2,v3);
+            break;
+        }
+        state_time++;
         vTaskDelay(100 / portTICK_PERIOD_MS);
      }
 }
-#else
 
-#include "driver/rmt.h"
-#include "soc/rmt_reg.h"
-#include "soc/rmt_struct.h"
-#include "esp_intr_alloc.h"
-#include <soc/dport_reg.h>
-
-#define RMT_CHANNEL     RMT_CHANNEL_2
-#define RMT_GPIO_NUM    GPIO_NUM_18
-#define RMT_CLK_DIV     80
-#define RMT_RX_FILTER_THRES    100
-
-void IRAM_ATTR rmt_isr(void* arg) {
-  uint32_t intr_st = RMT.int_st.val;
-        uint32_t channel_mask = BIT(RMT_CHANNEL_2*3+1);
-
-RMT.int_clr.val = intr_st;
-        short channel = RMT_CHANNEL_2;
-        if (!(intr_st & channel_mask)) return;
-
-        RMT.conf_ch[channel].conf1.rx_en = 0;
-        RMT.conf_ch[channel].conf1.mem_owner = RMT_MEM_OWNER_TX;
-        volatile rmt_item32_t* item = RMTMEM.chan[RMT_CHANNEL_2].data32;
-        if (item) {
-            test = item->duration0;
-        }
-
-        RMT.conf_ch[channel].conf1.mem_wr_rst = 1;
-        RMT.conf_ch[channel].conf1.mem_owner = RMT_MEM_OWNER_RX;
-        RMT.conf_ch[channel].conf1.rx_en = 1;
-
-        //clear RMT interrupt status.
-
-}
-
-rmt_isr_handle_t xHandler = NULL;
-intr_handle_t rmt_intr_handle;
-void app_main() {
-
-    rmt_config_t config;
-    config.rmt_mode = RMT_MODE_RX;
-    config.channel = (rmt_channel_t) RMT_CHANNEL_2;
-    config.gpio_num = (gpio_num_t)18;
-    config.mem_block_num = 1;                 //how many memory blocks 64 x N (0-7)
-    config.rx_config.filter_en = true;
-    config.rx_config.filter_ticks_thresh = 100;
-    config.rx_config.idle_threshold = 9500;
-    config.clk_div = 80; //1MHz
-    ESP_ERROR_CHECK(rmt_config(&config));
-    ESP_ERROR_CHECK(rmt_set_rx_intr_en(RMT_CHANNEL, true));
-    ESP_ERROR_CHECK(rmt_rx_start(RMT_CHANNEL, 1));
-    ESP_ERROR_CHECK(rmt_isr_register(rmt_isr, NULL, ESP_INTR_FLAG_LEVEL1, &rmt_intr_handle));
-    while (1) {
-        ESP_LOGI(TAG,"%u",test);
-        vTaskDelay(250 / portTICK_PERIOD_MS);
-    }
-}
-#endif
