@@ -37,6 +37,26 @@ void set_leftright_pixels(uint16_t rl, uint16_t gl, uint16_t bl,
 	}
 	np_show(&px, NEOPIXEL_RMT_CHANNEL);
 }
+
+
+void idle_pixels(unsigned long state_time) {
+	int i;
+  int s;
+  //unsigned long h;
+  //float hue;
+	for (i=0;i<NR_LED;i++) {
+    //h = (state_time + i)%360;
+    //hue = (float) h;
+    //np_set_pixel_color_hsb(&px, i, hue, 1, (float) 0.5);
+    //
+    uint32_t c;
+    s = (state_time + i) % 24;
+    c = (0xff << s) | (0xff >> (24-s));
+    np_set_pixel_color(&px, i, c);
+	}
+	np_show(&px, NEOPIXEL_RMT_CHANNEL);
+}
+
 #define RC_CHANNELS 6
 unsigned short rc_gpio[RC_CHANNELS]={4,18,19,34,35,36};
 unsigned short rc_gpio_binary_out[RC_CHANNELS]={33,32,27,26,25,22};
@@ -254,7 +274,10 @@ void app_main(void)
             set_all_pixels(0,l,0);
             break;
           case STATE_IDLE:
-            set_all_pixels(0,0,0);
+            if (state_time >= 100) {
+              idle_pixels(state_time-100);
+            } else 
+              set_all_pixels(0,0,0);
             break;
           default:
             set_all_pixels(v1,v2,v3);
