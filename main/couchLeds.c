@@ -28,7 +28,7 @@ void set_pixels(uint16_t r, uint16_t g, uint16_t b, uint16_t l) {
 
 #define RC_CHANNELS 6
 unsigned short rc_gpio[RC_CHANNELS]={4,18,19,34,35,36};
-unsigned short rc_gpio_binary_out[RC_CHANNELS]={33,32,27,26,25,23};
+unsigned short rc_gpio_binary_out[RC_CHANNELS]={33,32,27,26,25,22};
 unsigned long rc_val[RC_CHANNELS];
 // Measure RC data
 #define OLD_MIN 430
@@ -140,7 +140,16 @@ void app_main(void)
     char *disp;
 		ESP_LOGI(TAG,"On the Air.");
     init_leds();
+    vTaskDelay(1500 / portTICK_PERIOD_MS);
+    set_pixels(16,0,0,255);
+    vTaskDelay(1500 / portTICK_PERIOD_MS);
+    set_pixels(0,16,0,255);
+    vTaskDelay(1500 / portTICK_PERIOD_MS);
     xTaskCreatePinnedToCore(&rc_recv, "RCrcv", 8192, NULL, 55, NULL,1);
+    set_pixels(0,0,16,255);
+    vTaskDelay(1500 / portTICK_PERIOD_MS);
+    set_pixels(8,8,8,255);
+    vTaskDelay(1500 / portTICK_PERIOD_MS);
     //rmt_init();
      while (1) {
         rtc_wdt_feed();
