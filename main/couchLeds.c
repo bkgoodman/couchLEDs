@@ -65,6 +65,8 @@ unsigned long rc_val[RC_CHANNELS];
 #define OLD_MIN 430
 #define OLD_MAX 730
 #define RC_MEDIAN (((OLD_MAX-OLD_MIN)/2)+OLD_MIN)
+#define RC_BOTTOM_THIRD (((OLD_MAX-OLD_MIN)/3)+OLD_MIN)
+#define RC_TOP_THIRD ((((OLD_MAX-OLD_MIN)/3)*2)+OLD_MIN)
 void rc_recv(void *arg) {
   unsigned long tm[RC_CHANNELS];
   short i;
@@ -108,7 +110,7 @@ void init_leds() {
 	px.pixels = (uint8_t *)pixels;
 	px.pixel_count = NR_LED;
 #ifdef	NEOPIXEL_WS2812
-	strcpy(px.color_order, "GRB");
+	strcpy(px.color_order, "RGB");
 #else
 	strcpy(px.color_order, "GRBW");
 #endif
@@ -220,6 +222,11 @@ void app_main(void)
         unsigned int v1 = map_range(rc_val[0]);
         unsigned int v2 = map_range(rc_val[1]);
         unsigned int v3 = map_range(rc_val[2]);
+
+        mode = 1;
+        if (rc_val[2] > RC_TOP_THIRD) mode =2;
+        if (rc_val[2] < RC_BOTTOM_THIRD) mode =0;
+
         if (state != STATE_INIT) {
           if (v1<118) nextstate=STATE_LEFT;
           else if (v1>138) nextstate=STATE_RIGHT;
@@ -241,12 +248,16 @@ void app_main(void)
           l=16-l;
         }
         l = (l*16)+8;
-        if (mode == 0) ESP_LOGI(TAG,"RC Value= %lu %lu %lu = %u %u %u = level = %d : %s -> %s",rc_val[0],rc_val[1],rc_val[2],v1,v2,v3,l,statestr[nextstate],statestr[state]);
+        ESP_LOGI(TAG,"RC Value= %lu %lu %lu = %u %u %u = mode = %d : %s -> %s",
+            rc_val[0],rc_val[1],rc_val[2],v1,v2,v3,mode,statestr[nextstate],statestr[state]);
         //set_all_pixels(ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2],255);
         //set_all_pixels(0,0,0);
         //vTaskDelay(250 / portTICK_PERIOD_MS);
         //
-        if (mode == 1) {
+        if (mode == 2) {
+           set_all_pixels(state_time % 2 ? 255:0,0,0);
+        }
+        else if (mode == 1) {
                 switch (state_time % 20) {
                   case 0:
                     set_leftright_pixels(255,255,255,   0,0,0); 
@@ -255,7 +266,7 @@ void app_main(void)
                   case 4:
                   case 6:
                   case 8:
-                    set_leftright_pixels(0,255,0,   0,0,0); 
+                    set_leftright_pixels(255,0,0,   0,0,0); 
                     break;
                   case 10:
                     set_leftright_pixels(0,0,0,   255,255,255); 
@@ -283,21 +294,21 @@ void app_main(void)
             break;
           case STATE_LEFT:
             if (state_time % 2)
-              set_leftright_pixels(32,32,0,0,(v2>138) ? l:0,0);
+              set_leftright_pixels(255,255,0,0,(v2>138) ? l:0,0);
             else
               set_leftright_pixels(0,0,0,0,(v2>138) ? l:0,0);
             break;
           case STATE_RIGHT:
             if (state_time % 2)
-              set_leftright_pixels(0,(v2>138) ? l:0,0,32,32,0);
+              set_leftright_pixels(0,(v2>138) ? l:0,0,255,255,0);
             else
               set_leftright_pixels(0,(v2>138) ? l:0,0,0,0,0);
             break;
           case STATE_STOP:
-            set_all_pixels(64-(state_time*4),0,0);
+            set_all_pixels(256-(state_time*16),0,0);
             break;
           case STATE_REV:
-            set_all_pixels(32,32,32);
+            set_all_pixels(128,128,128);
             break;
           case STATE_FWD:
             set_all_pixels(0,l,0);
