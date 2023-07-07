@@ -301,6 +301,14 @@ static void neopixel_handleInterrupt(void *arg)
   return;
 }
 
+esp_err_t neopixel_switch_gpio(int gpioNum, rmt_channel_t channel) {
+	xSemaphoreTake(neopixel_sem, portMAX_DELAY);
+  rmt_tx_stop(channel);
+	esp_err_t r = rmt_set_pin(channel, RMT_MODE_TX, (gpio_num_t)gpioNum);
+	xSemaphoreGive(neopixel_sem) ;
+  return (r);
+}
+
 // Initialize Neopixel RMT interface on specific GPIO
 //===================================================
 int neopixel_init(int gpioNum, rmt_channel_t channel)

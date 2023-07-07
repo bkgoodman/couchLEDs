@@ -67,6 +67,7 @@ void np_clear(pixel_settings_t *px);
 
 int neopixel_init(int gpioNum, rmt_channel_t channel);
 void neopixel_deinit(rmt_channel_t channel);
+esp_err_t neopixel_switch_gpio(int gpioNum, rmt_channel_t channel);
 
 void rgb_to_hsb( uint32_t color, float *hue, float *sat, float *bri );
 uint32_t hsb_to_rgb(float hue, float saturation, float brightness);
