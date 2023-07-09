@@ -28,7 +28,6 @@ volatile uint16_t ReceiverChannels[RECEIVER_CHANNELS_NUM] = {0};
 const uint8_t XMIT_CHANNEL = 0;
 const uint8_t RECEIVER_CHANNELS[RECEIVER_CHANNELS_NUM] = { 1, 2, 3 };
 const uint8_t RECEIVER_GPIOS[RECEIVER_CHANNELS_NUM] = { 18, 17, 5 };
-extern volatile uint16_t rc_val;
 
 static void rmt_isr_handler(void* arg){
     // with reference to https://www.esp32.com/viewtopic.php?t=7116#p32383

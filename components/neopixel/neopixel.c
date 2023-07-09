@@ -38,6 +38,7 @@
 
 
 #define RMT_TICK_PER_US 8
+#define TAG "Neopixel"
 // determines how many clock cycles one "tick" is
 // [1..255], source is generally 80MHz APB clk
 #define RMT_RX_CLK_DIV (80000000/RMT_TICK_PER_US/1000000)
@@ -52,10 +53,10 @@ static uint16_t neopixel_pos, neopixel_half, neopixel_bufIsDirty, neopixel_terms
 static uint16_t neopixel_buf_len = 0;
 static pixel_settings_t *neopixel_px;
 static uint8_t *neopixel_buffer = NULL;
+static uint8_t *savebuf = NULL;
 static uint8_t neopixel_brightness = 255;
 
 static uint8_t used_channels[RMT_CHANNEL_MAX] = {0};
-volatile uint16_t rc_val=0;
 
 // Get color value of RGB component
 //---------------------------------------------------
@@ -457,6 +458,10 @@ void np_show(pixel_settings_t *px, rmt_channel_t channel)
 	// Allocate neopixel buffer if needed
 	if (neopixel_buffer == NULL) {
 		neopixel_buffer = (uint8_t *)malloc(blen);
+    ESP_LOGI(TAG,"Neo buffer at %p",neopixel_buffer);
+    savebuf = neopixel_buffer;
+    ESP_LOGI(TAG,"Neo ptr buffer at  %p to %p",&savebuf,&neopixel_buffer);
+    ESP_LOGI(TAG,"Neo buffer alloced from  %p to %p",savebuf,neopixel_buffer);
 		if (neopixel_buffer == NULL) return;
 		neopixel_buf_len = blen;
 	}
@@ -467,6 +472,10 @@ void np_show(pixel_settings_t *px, rmt_channel_t channel)
 		neopixel_buffer = (uint8_t *)malloc(blen);
 		if (neopixel_buffer == NULL) return;
 	}
+  if (neopixel_buffer != savebuf) {
+    ESP_LOGI(TAG,"Neo buffer pointer at  %p to %p",&savebuf,&neopixel_buffer);
+    ESP_LOGI(TAG,"NEo buffer changed from  %p to %p",savebuf,neopixel_buffer);
+  }
 	memcpy(neopixel_buffer, px->pixels, blen);
 
 	neopixel_buf_len = blen;

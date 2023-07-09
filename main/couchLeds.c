@@ -97,6 +97,7 @@ void rc_recv(void *arg) {
     state[i]=0;
     tm[i]=0;
   }
+  ESP_LOGE(TAG,"rc_val ptr is at %p size is %d",rc_val,sizeof(rc_val));
   while(1) {
     for (i=0;i<RC_CHANNELS;i++){
       unsigned short level = gpio_get_level(rc_gpio[i]);
@@ -110,10 +111,10 @@ void rc_recv(void *arg) {
         case 1: // Await Low
                 tm[i]++;
                 if (level==0) {
-                  state[i]=0;
-                  rc_val[i]=tm[i];
-                  gpio_set_level(rc_gpio_binary_out[i],(rc_val[i]>= RC_MEDIAN)? 1: 0);
-                }
+                    state[i]=0;
+                    rc_val[i]=tm[i];
+                    gpio_set_level(rc_gpio_binary_out[i],(rc_val[i]>= RC_MEDIAN)? 1: 0);
+                  }
           break;
       }
     }
@@ -276,6 +277,7 @@ void app_main(void)
 
     bkg_uart_init();
     unsigned short mode = 0;
+    unsigned long hornTime = 0;
 
 		ESP_LOGI(TAG,"On the Air.");
     init_leds();
@@ -307,6 +309,7 @@ void app_main(void)
         unsigned int v1 = map_range(rc_val[0]);
         unsigned int v2 = map_range(rc_val[1]);
         unsigned int v3 = map_range(rc_val[2]);
+        unsigned int v4 = map_range(rc_val[3]);
 
         short newmode = 1;
         if (rc_val[2] > RC_TOP_THIRD) {
@@ -320,6 +323,11 @@ void app_main(void)
         else if ((mode == 1) && (newmode != 1)) {
           stop_sound();
         }
+
+        if ((v3 > 200) && (hornTime >3)) {
+          play_sound(5);
+        }
+        hornTime++;
 
         mode = newmode;
 
