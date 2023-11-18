@@ -293,13 +293,13 @@ void app_main(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
     /*
     int i;
-    for (i=1;i<10;i++) {
+    for (i=0;i<12;i++) {
         ESP_LOGI(TAG,"Sound %d",i);
       play_sound(i);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
     }
     */
-    play_sound(6);
+    play_sound(11);
     //rmt_init();
      while (1) {
        uint16_t l;
@@ -324,10 +324,16 @@ void app_main(void)
           stop_sound();
         }
 
-        if ((v3 > 200) && (hornTime >3)) {
-          play_sound(5);
+        // Horn pressed
+        if (hornTime) {
+          if (++hornTime >= 3)
+            hornTime=0;
+        } else if (v4 > 200) {
+          if (hornTime  == 0) {
+          play_sound(10); // HORN
+          hornTime++;
+          }
         }
-        hornTime++;
 
         mode = newmode;
 
