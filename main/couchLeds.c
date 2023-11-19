@@ -71,6 +71,7 @@ void idle_pixels(unsigned long state_time) {
     np_set_pixel_color(&px, i, c);
 	}
 	np_show(&px, NEOPIXEL_RMT_CHANNEL);
+	vTaskDelay(10 / portTICK_PERIOD_MS);
 	np_show(&px, NEOPIXEL_RMT_CHANNEL2);
 }
 
@@ -83,9 +84,15 @@ unsigned long rc_val[RC_CHANNELS];
 // Measure RC data
 #define OLD_MIN 430
 #define OLD_MAX 730
-#define RC_MEDIAN (((OLD_MAX-OLD_MIN)/2)+OLD_MIN)
-#define RC_BOTTOM_THIRD (((OLD_MAX-OLD_MIN)/3)+OLD_MIN)
-#define RC_TOP_THIRD ((((OLD_MAX-OLD_MIN)/3)*2)+OLD_MIN)
+//#define RC_MEDIAN (((OLD_MAX-OLD_MIN)/2)+OLD_MIN)
+#define RC_MEDIAN(i) (((max_range[i]-min_range[i])/2)+min_range[i])
+#define RC_BOTTOM_THIRD(i) (((max_range[i]-OLD_MIN)/3)+min_range[i])
+#define RC_TOP_THIRD(i) ((((max_range[i]-min_range[i])/3)*2)+min_range[i])
+
+// Ranges for individual channels
+unsigned short min_range[RC_CHANNELS] = {519,491,366,366,366,366};
+unsigned short max_range[RC_CHANNELS] = {575,620,730,730,730,730};
+
 void rc_recv(void *arg) {
   unsigned long tm[RC_CHANNELS];
   short i;
@@ -113,7 +120,7 @@ void rc_recv(void *arg) {
                 if (level==0) {
                     state[i]=0;
                     rc_val[i]=tm[i];
-                    gpio_set_level(rc_gpio_binary_out[i],(rc_val[i]>= RC_MEDIAN)? 1: 0);
+                    gpio_set_level(rc_gpio_binary_out[i],(rc_val[i]>= RC_TOP_THIRD(i))? 1: 0);
                   }
           break;
       }
@@ -179,13 +186,13 @@ void init_leds() {
 	np_show(&px, NEOPIXEL_RMT_CHANNEL2);
 }
 
-int map_range(int value) {
+int map_range(int value, int index) {
     // Calculate the old range and the new range
-    int old_range = OLD_MAX - OLD_MIN;
+    int old_range = max_range[index] - min_range[index];
     int new_range = 255 - 0;
     
     // Map the value from the old range to the new range
-    int mapped_value = (((value - OLD_MIN) * new_range) / old_range) + 0;
+    int mapped_value = (((value - min_range[index]) * new_range) / old_range) + 0;
     
     if (mapped_value<0)  return 0;
     if (mapped_value>255)  return 255;
@@ -306,16 +313,16 @@ void app_main(void)
         rtc_wdt_feed();
         //ESP_LOGI(TAG,"%u %d %d %d",recv,ReceiverChannels[0],ReceiverChannels[1],ReceiverChannels[2]);
         //ESP_LOGI(TAG,"%u %u",recv,rc_test_val);
-        unsigned int v1 = map_range(rc_val[0]);
-        unsigned int v2 = map_range(rc_val[1]);
-        unsigned int v3 = map_range(rc_val[2]);
-        unsigned int v4 = map_range(rc_val[3]);
+        unsigned int v1 = map_range(rc_val[0],0);
+        unsigned int v2 = map_range(rc_val[1],1);
+        unsigned int v3 = map_range(rc_val[2],2);
+        unsigned int v4 = map_range(rc_val[3],3);
 
         short newmode = 1;
-        if (rc_val[2] > RC_TOP_THIRD) {
+        if (rc_val[2] > RC_TOP_THIRD(2)) {
             newmode =2;
         }
-        if (rc_val[2] < RC_BOTTOM_THIRD) newmode =0;
+        if (rc_val[2] < RC_BOTTOM_THIRD(2)) newmode =0;
 
         if ((newmode == 1) && (mode != 1)) {
           play_sound(1);
@@ -338,10 +345,10 @@ void app_main(void)
         mode = newmode;
 
         if (state != STATE_INIT) {
-          if (v1<118) nextstate=STATE_LEFT;
-          else if (v1>138) nextstate=STATE_RIGHT;
-          else if (v2>138) nextstate=STATE_FWD;
-          else if (v2<118) nextstate=STATE_REV;
+          if (v1<40) nextstate=STATE_RIGHT;
+          else if (v1>200) nextstate=STATE_LEFT;
+          else if (v2>200) nextstate=STATE_FWD;
+          else if (v2<40) nextstate=STATE_REV;
           else if (state != STATE_IDLE) nextstate=STATE_STOP;
         }
 
